@@ -1,0 +1,18 @@
+{
+  "name": "bday2022",
+  "version": "1.0.0",
+  "description": "A game for my wife for her bday 2022",
+  "scripts": {
+    "dev": "elm-live src/Main.elm --port 1234 --dir dist --start-page index.html -- --output dist/elm.js"
+  },
+  "author": "Wolfgang Schuster",
+  "volta": {
+    "node": "16.13.1"
+  },
+  "devDependencies": {
+    "elm": "^0.19.1-5",
+    "elm-format": "^0.8.5",
+    "elm-live": "^4.0.2",
+    "elm-review": "^2.7.0"
+  }
+}

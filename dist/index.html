@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Main</title>
+    <style>
+      body {
+        padding: 0;
+        margin: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <script src="elm.js"></script>
+    <script>
+      const saveKey = "save-data";
+
+      const app = Elm.Main.init({
+        flags: {
+          savedModel: localStorage.getItem(saveKey),
+          initialSeed: Date.now(),
+        },
+      });
+
+      app.ports.saveModel.subscribe(function (data) {
+        localStorage.setItem(saveKey, data);
+      });
+    </script>
+  </body>
+</html>
