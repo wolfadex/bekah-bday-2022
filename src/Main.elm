@@ -11,7 +11,8 @@ import Html.Styled.Events
 import Json.Decode exposing (Decoder)
 import Json.Encode exposing (Value)
 import Random exposing (Seed)
-import Time
+import Task
+import Time exposing (Month(..), Posix, Zone)
 
 
 main : Program Value Model Msg
@@ -30,6 +31,8 @@ type alias Model =
     , seed : Seed
     , windowSize : { width : Float, height : Float }
     , spinning : Timeline Spinning
+    , today : Posix
+    , zone : Zone
     }
 
 
@@ -69,6 +72,8 @@ defaultModel =
     , seed = Random.initialSeed 0
     , windowSize = { width = 800, height = 600 }
     , spinning = Animator.init NotYetSpun
+    , today = Time.millisToPosix 0
+    , zone = Time.utc
     }
 
 
@@ -107,12 +112,13 @@ init flags =
                 | seed = seed
                 , windowSize = windowSize
                 , reels = reels
+                , today = Time.millisToPosix initialSeed
               }
-            , Cmd.none
+            , Task.perform GotZone Time.here
             )
 
         Err _ ->
-            ( defaultModel, Cmd.none )
+            ( defaultModel, Task.perform GotZone Time.here )
 
 
 reelsGenerator : Random.Generator Reels
@@ -177,6 +183,7 @@ subscriptions model =
     Sub.batch
         [ Browser.Events.onResize WindowResized
         , Animator.toSubscription Tick model reelAnimator
+        , Time.every (30 * 60 * 1000) CurrentTime
         ]
 
 
@@ -192,11 +199,19 @@ type Msg
     | Stop
     | WindowResized Int Int
     | Tick Time.Posix
+    | GotZone Zone
+    | CurrentTime Posix
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     (case msg of
+        GotZone zone ->
+            ( { model | zone = zone }, Cmd.none )
+
+        CurrentTime today ->
+            ( { model | today = today }, Cmd.none )
+
         Spin ->
             case Animator.current model.spinning of
                 Spinning ->
@@ -210,7 +225,7 @@ update msg model =
                     ( { model
                         | spinning = respin model.spinning
                         , seed = seed
-                        , reels = reels
+                        , reels = addBdayToReels model.zone model.today reels
                       }
                     , Cmd.none
                     )
@@ -224,12 +239,15 @@ update msg model =
                         | spinning = respin model.spinning
                         , seed = seed
                         , reels =
-                            { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
-                            , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
-                            , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
-                            , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
-                            , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
-                            }
+                            addBdayToReels
+                                model.zone
+                                model.today
+                                { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
+                                , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
+                                , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
+                                , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
+                                , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
+                                }
                       }
                     , Cmd.none
                     )
@@ -258,6 +276,25 @@ update msg model =
             ( { model | windowSize = { width = toFloat w, height = toFloat h } }, Cmd.none )
     )
         |> (\( m, cmd ) -> ( m, Cmd.batch [ cmd, saveModel (encodeModel m) ] ))
+
+
+addBdayToReels : Zone -> Posix -> Reels -> Reels
+addBdayToReels zone today reels =
+    let
+        isBday : Bool
+        isBday =
+            (Time.toMonth zone today == Feb) && (Time.toDay zone today == 2)
+    in
+    if isBday then
+        { reel1 = bdayReels.reel1 ++ reels.reel1
+        , reel2 = bdayReels.reel2 ++ reels.reel2
+        , reel3 = bdayReels.reel3 ++ reels.reel3
+        , reel4 = bdayReels.reel4 ++ reels.reel4
+        , reel5 = bdayReels.reel5 ++ reels.reel5
+        }
+
+    else
+        reels
 
 
 respin : Timeline Spinning -> Timeline Spinning
