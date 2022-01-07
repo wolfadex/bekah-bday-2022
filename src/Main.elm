@@ -1,15 +1,17 @@
 port module Main exposing (main)
 
+import Animator exposing (Timeline)
+import Animator.Inline
 import Browser
 import Browser.Events
-import Element exposing (..)
-import Element.Font as Font
-import Html exposing (Html)
-import Html.Attributes
+import Css
+import Html.Styled exposing (Html)
+import Html.Styled.Attributes
+import Html.Styled.Events
 import Json.Decode exposing (Decoder)
 import Json.Encode exposing (Value)
 import Random exposing (Seed)
-import Update.Pipeline
+import Time
 
 
 main : Program Value Model Msg
@@ -26,7 +28,8 @@ type alias Model =
     { reels : Reels
     , money : Int
     , seed : Seed
-    , windowSize : { width : Int, height : Int }
+    , windowSize : { width : Float, height : Float }
+    , spinning : Timeline Spinning
     }
 
 
@@ -47,6 +50,12 @@ type Symbol
     | Blank
 
 
+type Spinning
+    = NotYetSpun
+    | Spinning
+    | Stopped
+
+
 defaultModel : Model
 defaultModel =
     { reels =
@@ -59,6 +68,7 @@ defaultModel =
     , money = 500
     , seed = Random.initialSeed 0
     , windowSize = { width = 800, height = 600 }
+    , spinning = Animator.init NotYetSpun
     }
 
 
@@ -81,9 +91,13 @@ bdayReels =
     }
 
 
+
+---- INIT ----
+
+
 init : Value -> ( Model, Cmd Msg )
 init flags =
-    case Json.Decode.decodeValue decodeFlags flags |> Debug.log "flags" of
+    case Json.Decode.decodeValue decodeFlags flags of
         Ok ( initialSeed, model, windowSize ) ->
             let
                 ( reels, seed ) =
@@ -113,7 +127,7 @@ reelsGenerator =
 
 reelGenerator : Random.Generator (List Symbol)
 reelGenerator =
-    Random.list 10 symbolGenerator
+    Random.list 100 symbolGenerator
 
 
 symbolGenerator : Random.Generator Symbol
@@ -127,7 +141,7 @@ symbolGenerator =
         ]
 
 
-decodeFlags : Decoder ( Int, Model, { width : Int, height : Int } )
+decodeFlags : Decoder ( Int, Model, { width : Float, height : Float } )
 decodeFlags =
     Json.Decode.map3 (\seed model windowSize -> ( seed, model, windowSize ))
         (Json.Decode.field "initialSeed" Json.Decode.int)
@@ -135,9 +149,9 @@ decodeFlags =
         (Json.Decode.field "windowSize" decodeWindowSize)
 
 
-decodeWindowSize : Decoder { width : Int, height : Int }
+decodeWindowSize : Decoder { width : Float, height : Float }
 decodeWindowSize =
-    Json.Decode.map2 (\w h -> { width = w, height = h })
+    Json.Decode.map2 (\w h -> { width = toFloat w, height = toFloat h })
         (Json.Decode.field "width" Json.Decode.int)
         (Json.Decode.field "height" Json.Decode.int)
 
@@ -154,26 +168,105 @@ decodeModel =
         ]
 
 
+
+---- UPDATE ----
+
+
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Browser.Events.onResize WindowResized
+subscriptions model =
+    Sub.batch
+        [ Browser.Events.onResize WindowResized
+        , Animator.toSubscription Tick model reelAnimator
+        ]
+
+
+reelAnimator : Animator.Animator Model
+reelAnimator =
+    Animator.watching .spinning
+        (\spinning model -> { model | spinning = spinning })
+        Animator.animator
 
 
 type Msg
     = Spin
+    | Stop
     | WindowResized Int Int
+    | Tick Time.Posix
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     (case msg of
         Spin ->
-            Update.Pipeline.save model
+            case Animator.current model.spinning of
+                Spinning ->
+                    ( model, Cmd.none )
+
+                NotYetSpun ->
+                    let
+                        ( reels, seed ) =
+                            Random.step reelsGenerator model.seed
+                    in
+                    ( { model
+                        | spinning = respin model.spinning
+                        , seed = seed
+                        , reels = reels
+                      }
+                    , Cmd.none
+                    )
+
+                Stopped ->
+                    let
+                        ( reels, seed ) =
+                            Random.step reelsGenerator model.seed
+                    in
+                    ( { model
+                        | spinning = respin model.spinning
+                        , seed = seed
+                        , reels =
+                            { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
+                            , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
+                            , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
+                            , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
+                            , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
+                            }
+                      }
+                    , Cmd.none
+                    )
+
+        Stop ->
+            ( { model
+                | spinning =
+                    case Animator.current model.spinning of
+                        Spinning ->
+                            Animator.interrupt [ Animator.event Animator.immediately Stopped ] model.spinning
+
+                        _ ->
+                            model.spinning
+              }
+            , Cmd.none
+            )
+
+        Tick newTime ->
+            if Animator.arrivedAt Stopped newTime model.spinning then
+                Debug.todo "arrived"
+
+            else
+                ( Animator.update newTime reelAnimator model, Cmd.none )
 
         WindowResized w h ->
-            Update.Pipeline.save { model | windowSize = { width = w, height = h } }
+            ( { model | windowSize = { width = toFloat w, height = toFloat h } }, Cmd.none )
     )
         |> (\( m, cmd ) -> ( m, Cmd.batch [ cmd, saveModel (encodeModel m) ] ))
+
+
+respin : Timeline Spinning -> Timeline Spinning
+respin =
+    Animator.queue
+        [ Animator.event Animator.immediately NotYetSpun
+        , Animator.event (Animator.seconds 3) Spinning
+        , Animator.event Animator.immediately Stopped
+        ]
 
 
 encodeModel : Model -> Value
@@ -186,65 +279,134 @@ encodeModel model =
 port saveModel : Value -> Cmd msg
 
 
+
+---- VIEW ----
+
+
 view : Model -> Browser.Document Msg
 view model =
     { title = "Reels of Fun!"
-    , body = [ layout [ width fill, height fill ] (viewModel model) ]
+    , body = [ Html.Styled.toUnstyled (viewModel model) ]
     }
 
 
-viewModel : Model -> Element Msg
+viewModel : Model -> Html Msg
 viewModel model =
     let
-        tileSize : Int
+        tileSize : Float
         tileSize =
-            min (model.windowSize.width // 6) (model.windowSize.height // 5)
+            min (model.windowSize.width / 6) (model.windowSize.height / 6)
     in
-    column
-        [ centerX ]
-        [ el [ Font.size 64, centerX ] (text "Reels of Fun!")
-        , Html.div
-            [ Html.Attributes.style "display" "grid"
-            , Html.Attributes.style "grid"
-                ("repeat(1, "
-                    ++ String.fromInt (tileSize + 1)
-                    ++ "px) / repeat(5, "
-                    ++ String.fromInt (tileSize + 1)
-                    ++ "px)"
-                )
+    Html.Styled.div
+        [ Html.Styled.Attributes.css
+            [ Css.displayFlex
+            , Css.flexDirection Css.column
+            , Css.alignItems Css.center
+            , Css.fontFamily Css.sansSerif
+            , Css.padding (Css.rem 1)
             ]
-            [ viewReel tileSize model.reels.reel1
-            , viewReel tileSize model.reels.reel2
-            , viewReel tileSize model.reels.reel3
-            , viewReel tileSize model.reels.reel4
-            , viewReel tileSize model.reels.reel5
+        ]
+        [ Html.Styled.span
+            [ Html.Styled.Attributes.css
+                [ Css.fontSize (Css.rem 4) ]
             ]
-            |> html
-            |> el [ centerX ]
+            [ Html.Styled.text "Reels of Fun!" ]
+        , Html.Styled.div
+            [ Html.Styled.Attributes.css
+                [ Css.displayFlex
+                , Css.marginTop (Css.rem 1)
+                , Css.marginBottom (Css.rem 1)
+                , Css.border3 (Css.px 8) Css.solid (Css.rgb 128 256 256)
+                ]
+            ]
+            [ viewReel model.spinning tileSize model.reels.reel1
+            , viewReel model.spinning tileSize model.reels.reel2
+            , viewReel model.spinning tileSize model.reels.reel3
+            , viewReel model.spinning tileSize model.reels.reel4
+            , viewReel model.spinning tileSize model.reels.reel5
+            ]
+        , Html.Styled.button
+            [ Html.Styled.Events.onClick <|
+                case Animator.current model.spinning of
+                    Spinning ->
+                        Stop
+
+                    Stopped ->
+                        Spin
+
+                    NotYetSpun ->
+                        Spin
+            , Html.Styled.Attributes.css
+                [ Css.fontSize (Css.rem 3)
+                , Css.padding2 (Css.rem 0.5) (Css.rem 1)
+                , Css.textTransform Css.uppercase
+                , Css.cursor Css.pointer
+                ]
+            ]
+            [ Html.Styled.text <|
+                case Animator.current model.spinning |> Debug.log "spinning state" of
+                    NotYetSpun ->
+                        "Spin"
+
+                    Stopped ->
+                        "Spin"
+
+                    Spinning ->
+                        "Stop"
+            ]
         ]
 
 
-viewReel : Int -> List Symbol -> Html msg
-viewReel tileSize symbols =
-    Html.div
-        [ Html.Attributes.style "width" (String.fromInt tileSize ++ "px")
-        , Html.Attributes.style "height" (String.fromInt (tileSize * 4) ++ "px")
-        , Html.Attributes.style "overflow" "hidden"
+viewReel : Timeline Spinning -> Float -> List Symbol -> Html msg
+viewReel spinning tileSize symbols =
+    let
+        tileCount : Float
+        tileCount =
+            toFloat (List.length symbols)
+    in
+    Html.Styled.div
+        [ Html.Styled.Attributes.css
+            [ Css.width (Css.px tileSize)
+            , Css.height (Css.px (tileSize * 4))
+            , Css.overflow Css.hidden
+            ]
         ]
-        (List.map (viewSymbol tileSize) symbols)
+        (List.map (viewSymbol spinning tileSize tileCount) symbols)
 
 
-viewSymbol : Int -> Symbol -> Html msg
-viewSymbol tileSize symbol =
-    Html.div
-        [ Html.Attributes.style "width" (String.fromInt tileSize ++ "px")
-        , Html.Attributes.style "height" (String.fromInt tileSize ++ "px")
-        , Html.Attributes.style "background" (symbolToSprite tileSize symbol)
+viewSymbol : Timeline Spinning -> Float -> Float -> Symbol -> Html msg
+viewSymbol spinning tileSize tileCount symbol =
+    Html.Styled.div
+        [ Html.Styled.Attributes.style "background" (symbolToSprite tileSize symbol)
+        , Html.Styled.Attributes.css
+            [ Css.width (Css.px tileSize)
+            , Css.height (Css.px tileSize)
+            ]
+        , Html.Styled.Attributes.fromUnstyled <|
+            Animator.Inline.transform
+                { position =
+                    { x = 0
+                    , y =
+                        Animator.move spinning <|
+                            \state ->
+                                case state of
+                                    Spinning ->
+                                        Animator.at 0
+
+                                    Stopped ->
+                                        Animator.at 0
+
+                                    NotYetSpun ->
+                                        Animator.at (tileSize * -(tileCount - 4))
+                    }
+                , rotate = 0
+                , scale = 1
+                }
         ]
         []
 
 
-symbolToSprite : Int -> Symbol -> String
+symbolToSprite : Float -> Symbol -> String
 symbolToSprite tileSize symbol =
     case symbol of
         Ace ->
@@ -290,6 +452,6 @@ symbolToSprite tileSize symbol =
             symbolToSpriteHelper (tileSize * 2) (tileSize * 3)
 
 
-symbolToSpriteHelper : Int -> Int -> String
+symbolToSpriteHelper : Float -> Float -> String
 symbolToSpriteHelper x y =
-    "transparent url(Symbols.png) no-repeat -" ++ String.fromInt x ++ "px -" ++ String.fromInt y ++ "px / 500% scroll"
+    "transparent url(Symbols.png) no-repeat -" ++ String.fromFloat x ++ "px -" ++ String.fromFloat y ++ "px / 500% scroll"
