@@ -18,7 +18,7 @@
             "lue-bird/elm-typesafe-array": "18.3.0",
             "mdgriffith/elm-animator": "1.1.1",
             "mdgriffith/elm-ui": "1.1.8",
-            "rtfeldman/elm-css": "17.0.1"
+            "rtfeldman/elm-css": "17.0.2"
         },
         "indirect": {
             "MartinSStewart/elm-serialize": "1.3.0",
@@ -33,6 +33,7 @@
             "ianmackenzie/elm-units": "2.9.0",
             "lue-bird/elm-linear-direction": "2.3.0",
             "lue-bird/elm-typed-value": "6.0.1",
+            "robinheghan/murmur3": "1.0.0",
             "rtfeldman/elm-hex": "1.0.0"
         }
     },
