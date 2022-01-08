@@ -33,6 +33,7 @@ type alias Model =
     , spinning : Timeline Spinning
     , today : Posix
     , zone : Zone
+    , wins : List Win
     }
 
 
@@ -74,6 +75,7 @@ defaultModel =
     , spinning = Animator.init NotYetSpun
     , today = Time.millisToPosix 0
     , zone = Time.utc
+    , wins = []
     }
 
 
@@ -225,7 +227,15 @@ update msg model =
                     ( { model
                         | spinning = respin model.spinning
                         , seed = seed
-                        , reels = addBdayToReels model.zone model.today reels
+                        , wins = []
+                        , reels =
+                            -- addBdayToReels model.zone model.today reels
+                            { reel1 = testReel
+                            , reel2 = testReel
+                            , reel3 = testReel
+                            , reel4 = testReel
+                            , reel5 = testReel
+                            }
                       }
                     , Cmd.none
                     )
@@ -238,16 +248,23 @@ update msg model =
                     ( { model
                         | spinning = respin model.spinning
                         , seed = seed
+                        , wins = []
                         , reels =
-                            addBdayToReels
-                                model.zone
-                                model.today
-                                { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
-                                , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
-                                , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
-                                , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
-                                , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
-                                }
+                            -- addBdayToReels
+                            --     model.zone
+                            --     model.today
+                            --     { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
+                            --     , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
+                            --     , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
+                            --     , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
+                            --     , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
+                            --     }
+                            { reel1 = testReel
+                            , reel2 = testReel
+                            , reel3 = testReel
+                            , reel4 = testReel
+                            , reel5 = testReel
+                            }
                       }
                     , Cmd.none
                     )
@@ -266,8 +283,15 @@ update msg model =
             )
 
         Tick newTime ->
-            if Animator.arrivedAt Stopped newTime model.spinning then
-                Debug.todo "arrived"
+            if Animator.arrived model.spinning == Stopped then
+                let
+                    nextModel : Model
+                    nextModel =
+                        Animator.update newTime reelAnimator model
+                in
+                ( { nextModel | wins = findWins nextModel.reels }
+                , Cmd.none
+                )
 
             else
                 ( Animator.update newTime reelAnimator model, Cmd.none )
@@ -276,6 +300,86 @@ update msg model =
             ( { model | windowSize = { width = toFloat w, height = toFloat h } }, Cmd.none )
     )
         |> (\( m, cmd ) -> ( m, Cmd.batch [ cmd, saveModel (encodeModel m) ] ))
+
+
+type alias Win =
+    { reel1 : Int
+    , reel2 : Int
+    , reel3 : Int
+    , reel4 : Int
+    , reel5 : Int
+    }
+
+
+findWins : Reels -> List Win
+findWins reels =
+    Maybe.map5
+        (\column1 column2 column3 column4 column5 ->
+            List.filter
+                (\line ->
+                    Maybe.map5
+                        (\s1 s2 s3 s4 s5 -> s1 == s2 && s2 == s3 && s3 == s4 && s4 == s5)
+                        (getSymbolInRow line.reel1 column1)
+                        (getSymbolInRow line.reel2 column2)
+                        (getSymbolInRow line.reel3 column3)
+                        (getSymbolInRow line.reel4 column4)
+                        (getSymbolInRow line.reel5 column5)
+                        |> Maybe.withDefault False
+                )
+                winningLines
+        )
+        (getRows reels.reel1)
+        (getRows reels.reel2)
+        (getRows reels.reel3)
+        (getRows reels.reel4)
+        (getRows reels.reel5)
+        |> Maybe.withDefault []
+
+
+winningLines : List { reel1 : Int, reel2 : Int, reel3 : Int, reel4 : Int, reel5 : Int }
+winningLines =
+    [ { reel1 = 1, reel2 = 1, reel3 = 1, reel4 = 1, reel5 = 1 }
+    , { reel1 = 2, reel2 = 2, reel3 = 2, reel4 = 2, reel5 = 2 }
+    , { reel1 = 3, reel2 = 3, reel3 = 3, reel4 = 3, reel5 = 3 }
+    , { reel1 = 4, reel2 = 4, reel3 = 4, reel4 = 4, reel5 = 4 }
+    ]
+
+
+getSymbolInRow : Int -> Column -> Maybe Symbol
+getSymbolInRow row column =
+    case row of
+        1 ->
+            Just column.row1
+
+        2 ->
+            Just column.row2
+
+        3 ->
+            Just column.row3
+
+        4 ->
+            Just column.row4
+
+        _ ->
+            Nothing
+
+
+type alias Column =
+    { row1 : Symbol
+    , row2 : Symbol
+    , row3 : Symbol
+    , row4 : Symbol
+    }
+
+
+getRows : List Symbol -> Maybe Column
+getRows column =
+    case column of
+        row1 :: row2 :: row3 :: row4 :: _ ->
+            Just { row1 = row1, row2 = row2, row3 = row3, row4 = row4 }
+
+        _ ->
+            Nothing
 
 
 addBdayToReels : Zone -> Posix -> Reels -> Reels
@@ -333,6 +437,10 @@ viewModel model =
         tileSize : Float
         tileSize =
             min (model.windowSize.width / 6) (model.windowSize.height / 6)
+
+        viewReelHelper : List Symbol -> Html msg
+        viewReelHelper =
+            viewReel model.spinning tileSize
     in
     Html.Styled.div
         [ Html.Styled.Attributes.css
@@ -356,11 +464,11 @@ viewModel model =
                 , Css.border3 (Css.px 8) Css.solid (Css.rgb 128 256 256)
                 ]
             ]
-            [ viewReel model.spinning tileSize model.reels.reel1
-            , viewReel model.spinning tileSize model.reels.reel2
-            , viewReel model.spinning tileSize model.reels.reel3
-            , viewReel model.spinning tileSize model.reels.reel4
-            , viewReel model.spinning tileSize model.reels.reel5
+            [ viewReelHelper model.reels.reel1
+            , viewReelHelper model.reels.reel2
+            , viewReelHelper model.reels.reel3
+            , viewReelHelper model.reels.reel4
+            , viewReelHelper model.reels.reel5
             ]
         , Html.Styled.button
             [ Html.Styled.Events.onClick <|
@@ -381,7 +489,7 @@ viewModel model =
                 ]
             ]
             [ Html.Styled.text <|
-                case Animator.current model.spinning |> Debug.log "spinning state" of
+                case Animator.current model.spinning of
                     NotYetSpun ->
                         "Spin"
 
@@ -391,7 +499,17 @@ viewModel model =
                     Spinning ->
                         "Stop"
             ]
+        , Html.Styled.ul
+            []
+            (List.map viewWin model.wins)
         ]
+
+
+viewWin : Win -> Html Msg
+viewWin win =
+    Html.Styled.li
+        []
+        [ Html.Styled.text ("Win: " ++ String.fromInt win.reel1) ]
 
 
 viewReel : Timeline Spinning -> Float -> List Symbol -> Html msg
@@ -492,3 +610,108 @@ symbolToSprite tileSize symbol =
 symbolToSpriteHelper : Float -> Float -> String
 symbolToSpriteHelper x y =
     "transparent url(Symbols.png) no-repeat -" ++ String.fromFloat x ++ "px -" ++ String.fromFloat y ++ "px / 500% scroll"
+
+
+testReel : List Symbol
+testReel =
+    [ Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ace
+    , King
+    , Queen
+    , Jack
+    , Ten
+    , Nine
+    , Ace
+    , King
+    , Queen
+    , Jack
+    ]
