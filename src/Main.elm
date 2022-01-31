@@ -10,6 +10,7 @@ import Html.Styled.Attributes
 import Html.Styled.Events
 import Json.Decode exposing (Decoder)
 import Json.Encode exposing (Value)
+import Process
 import Random exposing (Seed)
 import Task
 import Time exposing (Month(..), Posix, Zone)
@@ -28,6 +29,8 @@ main =
 type alias Model =
     { reels : Reels
     , money : Int
+    , bet : Int
+    , calculatedWin : Bool
     , seed : Seed
     , windowSize : { width : Float, height : Float }
     , spinning : Timeline Spinning
@@ -70,6 +73,8 @@ defaultModel =
         , reel5 = []
         }
     , money = 500
+    , bet = 1
+    , calculatedWin = False
     , seed = Random.initialSeed 0
     , windowSize = { width = 800, height = 600 }
     , spinning = Animator.init NotYetSpun
@@ -145,7 +150,8 @@ symbolGenerator =
         , ( 7, Queen )
         , ( 18, Jack )
         , ( 25, Ten )
-        , ( 40, Nine )
+        , ( 80, Nine )
+        , ( 1, HBDDash )
         ]
 
 
@@ -168,9 +174,7 @@ decodeModel : Decoder Model
 decodeModel =
     Json.Decode.oneOf
         [ Json.Decode.map
-            (\money ->
-                { defaultModel | money = money }
-            )
+            (\money -> { defaultModel | money = money })
             (Json.Decode.field "money" Json.Decode.int)
         , Json.Decode.succeed defaultModel
         ]
@@ -203,6 +207,10 @@ type Msg
     | Tick Time.Posix
     | GotZone Zone
     | CurrentTime Posix
+    | DecreaseBet
+    | IncreaseBet
+    | NoOp
+    | ResetWinCalc
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -214,67 +222,98 @@ update msg model =
         CurrentTime today ->
             ( { model | today = today }, Cmd.none )
 
+        NoOp ->
+            ( model, Cmd.none )
+
+        IncreaseBet ->
+            ( { model | bet = min (model.bet + 1) model.money }, Cmd.none )
+
+        DecreaseBet ->
+            ( { model | bet = max (model.bet - 1) 1 }, Cmd.none )
+
         Spin ->
-            case Animator.current model.spinning of
-                Spinning ->
-                    ( model, Cmd.none )
+            if model.money > 0 then
+                case Animator.current model.spinning of
+                    Spinning ->
+                        ( model, Cmd.none )
 
-                NotYetSpun ->
-                    let
-                        ( reels, seed ) =
-                            Random.step reelsGenerator model.seed
-                    in
-                    ( { model
-                        | spinning = respin model.spinning
-                        , seed = seed
-                        , wins = []
-                        , reels =
-                            -- addBdayToReels model.zone model.today reels
-                            { reel1 = testReel
-                            , reel2 = testReel
-                            , reel3 = testReel
-                            , reel4 = testReel
-                            , reel5 = testReel
-                            }
-                      }
-                    , Cmd.none
-                    )
+                    NotYetSpun ->
+                        let
+                            ( reels, seed ) =
+                                Random.step reelsGenerator model.seed
+                        in
+                        ( { model
+                            | spinning = respin model.spinning
+                            , seed = seed
+                            , wins = []
+                            , money = model.money - model.bet
+                            , bet = min model.bet model.money
+                            , reels =
+                                addBdayToReels model.zone model.today reels
 
-                Stopped ->
-                    let
-                        ( reels, seed ) =
-                            Random.step reelsGenerator model.seed
-                    in
-                    ( { model
-                        | spinning = respin model.spinning
-                        , seed = seed
-                        , wins = []
-                        , reels =
-                            -- addBdayToReels
-                            --     model.zone
-                            --     model.today
-                            --     { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
-                            --     , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
-                            --     , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
-                            --     , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
-                            --     , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
-                            --     }
-                            { reel1 = testReel
-                            , reel2 = testReel
-                            , reel3 = testReel
-                            , reel4 = testReel
-                            , reel5 = testReel
-                            }
-                      }
-                    , Cmd.none
-                    )
+                            -- { reel1 = testReel
+                            -- , reel2 = testReel
+                            -- , reel3 = testReel
+                            -- , reel4 = testReel
+                            -- , reel5 = testReel
+                            -- }
+                          }
+                        , Cmd.none
+                        )
+
+                    Stopped ->
+                        let
+                            ( reels, seed ) =
+                                Random.step reelsGenerator model.seed
+                        in
+                        ( { model
+                            | spinning = respin model.spinning
+                            , seed = seed
+                            , wins = []
+                            , money = model.money - model.bet
+                            , bet = min model.bet model.money
+                            , reels =
+                                addBdayToReels
+                                    model.zone
+                                    model.today
+                                    { reel1 = reels.reel1 ++ List.take 5 model.reels.reel1
+                                    , reel2 = reels.reel2 ++ List.take 5 model.reels.reel2
+                                    , reel3 = reels.reel3 ++ List.take 5 model.reels.reel3
+                                    , reel4 = reels.reel4 ++ List.take 5 model.reels.reel4
+                                    , reel5 = reels.reel5 ++ List.take 5 model.reels.reel5
+                                    }
+
+                            -- { reel1 = testReel
+                            -- , reel2 = testReel
+                            -- , reel3 = testReel
+                            -- , reel4 = testReel
+                            -- , reel5 = testReel
+                            -- }
+                          }
+                        , Process.sleep 15
+                            |> Task.perform (\() -> ResetWinCalc)
+                        )
+
+            else
+                ( model, Cmd.none )
+
+        ResetWinCalc ->
+            ( { model
+                | calculatedWin = False
+                , wins = []
+              }
+            , Cmd.none
+            )
 
         Stop ->
             ( { model
                 | spinning =
                     case Animator.current model.spinning of
                         Spinning ->
-                            Animator.interrupt [ Animator.event Animator.immediately Stopped ] model.spinning
+                            Animator.interrupt
+                                [ Animator.event Animator.immediately Stopped
+                                ]
+                                model.spinning
 
                         _ ->
                             model.spinning
@@ -288,8 +327,21 @@ update msg model =
                     nextModel : Model
                     nextModel =
                         Animator.update newTime reelAnimator model
+
+                    wins : List Win
+                    wins =
+                        findWins nextModel.reels
                 in
-                ( { nextModel | wins = findWins nextModel.reels }
+                ( { nextModel
+                    | wins = wins
+                    , money =
+                        if model.calculatedWin then
+                            model.money
+
+                        else
+                            model.money + (List.length wins * model.bet)
+                    , calculatedWin = True
+                  }
                 , Cmd.none
                 )
 
@@ -318,7 +370,17 @@ findWins reels =
             List.filter
                 (\line ->
                     Maybe.map5
-                        (\s1 s2 s3 s4 s5 -> s1 == s2 && s2 == s3 && s3 == s4 && s4 == s5)
+                        (\s1 s2 s3 s4 s5 ->
+                            case List.filter (isWild >> not) [ s1, s2, s3, s4, s5 ] of
+                                [] ->
+                                    True
+
+                                [ _ ] ->
+                                    True
+
+                                first :: rest ->
+                                    List.all ((==) first) rest
+                        )
                         (getSymbolInRow line.reel1 column1)
                         (getSymbolInRow line.reel2 column2)
                         (getSymbolInRow line.reel3 column3)
@@ -334,6 +396,20 @@ findWins reels =
         (getRows reels.reel4)
         (getRows reels.reel5)
         |> Maybe.withDefault []
+
+
+isWild : Symbol -> Bool
+isWild symbol =
+    List.any ((==) symbol)
+        [ HBDH
+        , HBDP
+        , HBDY
+        , HBDB
+        , HBDD
+        , HBDDash
+        , HBDE
+        , Blank
+        ]
 
 
 winningLines : List { reel1 : Int, reel2 : Int, reel3 : Int, reel4 : Int, reel5 : Int }
@@ -461,7 +537,7 @@ viewModel model =
                 [ Css.displayFlex
                 , Css.marginTop (Css.rem 1)
                 , Css.marginBottom (Css.rem 1)
-                , Css.border3 (Css.px 8) Css.solid (Css.rgb 128 256 256)
+                , Css.border3 (Css.px 8) Css.solid (Css.rgb 128 255 255)
                 ]
             ]
             [ viewReelHelper model.reels.reel1
@@ -470,46 +546,118 @@ viewModel model =
             , viewReelHelper model.reels.reel4
             , viewReelHelper model.reels.reel5
             ]
-        , Html.Styled.button
-            [ Html.Styled.Events.onClick <|
-                case Animator.current model.spinning of
-                    Spinning ->
-                        Stop
 
-                    Stopped ->
-                        Spin
-
-                    NotYetSpun ->
-                        Spin
-            , Html.Styled.Attributes.css
-                [ Css.fontSize (Css.rem 3)
-                , Css.padding2 (Css.rem 0.5) (Css.rem 1)
-                , Css.textTransform Css.uppercase
-                , Css.cursor Css.pointer
+        -- Win lines
+        , Html.Styled.div
+            [ Html.Styled.Attributes.css
+                [ Css.position Css.absolute
+                , Css.top (Css.rem 5)
                 ]
             ]
-            [ Html.Styled.text <|
-                case Animator.current model.spinning of
-                    NotYetSpun ->
-                        "Spin"
-
-                    Stopped ->
-                        "Spin"
-
-                    Spinning ->
-                        "Stop"
+            [ Html.Styled.div
+                [ Html.Styled.Attributes.css
+                    [ Css.displayFlex
+                    , Css.marginTop (Css.rem 1)
+                    , Css.marginBottom (Css.rem 1)
+                    , Css.border3 (Css.px 8) Css.solid (Css.rgba 0 0 0 0)
+                    ]
+                ]
+                (List.map (viewWinLine tileSize) model.wins)
             ]
-        , Html.Styled.ul
-            []
-            (List.map viewWin model.wins)
+
+        -- Spin button
+        , Html.Styled.div
+            [ Html.Styled.Attributes.css
+                [ Css.displayFlex
+                , Css.alignItems Css.center
+                ]
+            ]
+            [ Html.Styled.span
+                [ Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.marginLeft (Css.rem 1)
+                    , Css.textTransform Css.uppercase
+                    , Css.cursor Css.pointer
+                    ]
+                ]
+                [ Html.Styled.text ("Funds: $" ++ String.fromInt model.money) ]
+            , Html.Styled.button
+                [ Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.marginLeft (Css.rem 5)
+                    , Css.textTransform Css.uppercase
+                    , Css.cursor Css.pointer
+                    ]
+                , Html.Styled.Events.onClick <|
+                    case Animator.current model.spinning of
+                        Spinning ->
+                            NoOp
+
+                        Stopped ->
+                            DecreaseBet
+
+                        NotYetSpun ->
+                            DecreaseBet
+                ]
+                [ Html.Styled.text "-" ]
+            , Html.Styled.span
+                [ Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.marginLeft (Css.rem 1)
+                    , Css.textTransform Css.uppercase
+                    , Css.cursor Css.pointer
+                    ]
+                ]
+                [ Html.Styled.text ("$" ++ String.fromInt model.bet) ]
+            , Html.Styled.button
+                [ Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.marginLeft (Css.rem 1)
+                    ]
+                , Html.Styled.Events.onClick <|
+                    case Animator.current model.spinning of
+                        Spinning ->
+                            NoOp
+
+                        Stopped ->
+                            IncreaseBet
+
+                        NotYetSpun ->
+                            IncreaseBet
+                ]
+                [ Html.Styled.text "+" ]
+            , Html.Styled.button
+                [ Html.Styled.Events.onClick <|
+                    case Animator.current model.spinning of
+                        Spinning ->
+                            Stop
+
+                        Stopped ->
+                            Spin
+
+                        NotYetSpun ->
+                            Spin
+                , Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.padding2 (Css.rem 0.5) (Css.rem 1)
+                    , Css.textTransform Css.uppercase
+                    , Css.cursor Css.pointer
+                    , Css.marginLeft (Css.rem 3)
+                    ]
+                ]
+                [ Html.Styled.text <|
+                    case Animator.current model.spinning of
+                        NotYetSpun ->
+                            "Spin"
+
+                        Stopped ->
+                            "Spin"
+
+                        Spinning ->
+                            "Stop"
+                ]
+            ]
         ]
-
-
-viewWin : Win -> Html Msg
-viewWin win =
-    Html.Styled.li
-        []
-        [ Html.Styled.text ("Win: " ++ String.fromInt win.reel1) ]
 
 
 viewReel : Timeline Spinning -> Float -> List Symbol -> Html msg
@@ -527,6 +675,37 @@ viewReel spinning tileSize symbols =
             ]
         ]
         (List.map (viewSymbol spinning tileSize tileCount) symbols)
+
+
+viewWinLine : Float -> Win -> Html msg
+viewWinLine tileSize win =
+    let
+        viewWinTile offset =
+            Html.Styled.div
+                [ Html.Styled.Attributes.css
+                    [ Css.width (Css.px tileSize)
+                    , Css.height (Css.px tileSize)
+                    , Css.marginTop (Css.px (tileSize * (toFloat offset - 1)))
+                    , Css.border3 (Css.px 3) Css.dashed (Css.rgb 255 100 255)
+                    ]
+                ]
+                []
+    in
+    Html.Styled.div
+        [ Html.Styled.Attributes.css
+            [ Css.width (Css.px (tileSize * 5))
+            , Css.height (Css.px tileSize)
+            , Css.displayFlex
+            , Css.position Css.absolute
+            , Css.transform (Css.translateX (Css.pct -50))
+            ]
+        ]
+        [ viewWinTile win.reel1
+        , viewWinTile win.reel2
+        , viewWinTile win.reel3
+        , viewWinTile win.reel4
+        , viewWinTile win.reel5
+        ]
 
 
 viewSymbol : Timeline Spinning -> Float -> Float -> Symbol -> Html msg
