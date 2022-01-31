@@ -16,17 +16,17 @@
     <script src="elm.js"></script>
     <script>
       const saveKey = "save-data";
-
+      const saveData = localStorage.getItem(saveKey);
       const app = Elm.Main.init({
         flags: {
-          savedModel: localStorage.getItem(saveKey),
+          savedModel: saveData == null ? saveData : JSON.parse(saveData),
           initialSeed: Date.now(),
           windowSize: { width: window.innerWidth, height: window.innerHeight },
         },
       });
 
       app.ports.saveModel.subscribe(function (data) {
-        localStorage.setItem(saveKey, data);
+        localStorage.setItem(saveKey, JSON.stringify(data));
       });
     </script>
   </body>
