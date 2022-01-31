@@ -10651,6 +10651,7 @@ var $rtfeldman$elm_css$Css$cursor = $rtfeldman$elm_css$Css$prop1('cursor');
 var $rtfeldman$elm_css$Css$displayFlex = A2($rtfeldman$elm_css$Css$property, 'display', 'flex');
 var $rtfeldman$elm_css$Html$Styled$div = $rtfeldman$elm_css$Html$Styled$node('div');
 var $rtfeldman$elm_css$Css$flexDirection = $rtfeldman$elm_css$Css$prop1('flex-direction');
+var $rtfeldman$elm_css$Css$flexWrap = $rtfeldman$elm_css$Css$prop1('flex-wrap');
 var $rtfeldman$elm_css$Css$fontFamily = $rtfeldman$elm_css$Css$prop1('font-family');
 var $rtfeldman$elm_css$Css$fontSize = $rtfeldman$elm_css$Css$prop1('font-size');
 var $rtfeldman$elm_css$Css$marginBottom = $rtfeldman$elm_css$Css$prop1('margin-bottom');
@@ -11679,6 +11680,7 @@ var $author$project$Main$viewWinLine = F2(
 					viewWinTile(win.reel5)
 				]));
 	});
+var $rtfeldman$elm_css$Css$wrap = {flexDirectionOrWrap: $rtfeldman$elm_css$Css$Structure$Compatible, flexWrap: $rtfeldman$elm_css$Css$Structure$Compatible, value: 'wrap'};
 var $author$project$Main$viewModel = function (model) {
 	var tileSize = A2($elm$core$Basics$min, model.windowSize.width / 6, model.windowSize.height / 6);
 	var viewReelHelper = A2($author$project$Main$viewReel, model.spinning, tileSize);
@@ -11787,7 +11789,8 @@ var $author$project$Main$viewModel = function (model) {
 						_List_fromArray(
 							[
 								$rtfeldman$elm_css$Css$displayFlex,
-								$rtfeldman$elm_css$Css$alignItems($rtfeldman$elm_css$Css$center)
+								$rtfeldman$elm_css$Css$alignItems($rtfeldman$elm_css$Css$center),
+								$rtfeldman$elm_css$Css$flexWrap($rtfeldman$elm_css$Css$wrap)
 							]))
 					]),
 				_List_fromArray(

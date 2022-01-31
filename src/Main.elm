@@ -576,6 +576,7 @@ viewModel model =
             [ Html.Styled.Attributes.css
                 [ Css.displayFlex
                 , Css.alignItems Css.center
+                , Css.flexWrap Css.wrap
                 ]
             ]
             [ Html.Styled.span
