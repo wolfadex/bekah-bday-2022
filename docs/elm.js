@@ -8289,6 +8289,12 @@ var $author$project$Main$update = F2(
 								model,
 								{zone: zone}),
 							$elm$core$Platform$Cmd$none);
+					case 'ResetGame':
+						return _Utils_Tuple2(
+							_Utils_update(
+								model,
+								{money: $author$project$Main$defaultModel.money}),
+							$elm$core$Platform$Cmd$none);
 					case 'CurrentTime':
 						var today = msg.a;
 						return _Utils_Tuple2(
@@ -9172,6 +9178,7 @@ var $rtfeldman$elm_css$Html$Styled$toUnstyled = $rtfeldman$elm_css$VirtualDom$St
 var $author$project$Main$DecreaseBet = {$: 'DecreaseBet'};
 var $author$project$Main$IncreaseBet = {$: 'IncreaseBet'};
 var $author$project$Main$NoOp = {$: 'NoOp'};
+var $author$project$Main$ResetGame = {$: 'ResetGame'};
 var $author$project$Main$Spin = {$: 'Spin'};
 var $author$project$Main$Stop = {$: 'Stop'};
 var $rtfeldman$elm_css$Css$Structure$Compatible = {$: 'Compatible'};
@@ -11928,6 +11935,52 @@ var $author$project$Main$viewModel = function (model) {
 											return 'Spin';
 										default:
 											return 'Stop';
+									}
+								}())
+							])),
+						A2(
+						$rtfeldman$elm_css$Html$Styled$button,
+						_List_fromArray(
+							[
+								$rtfeldman$elm_css$Html$Styled$Events$onClick(
+								function () {
+									var _v4 = $mdgriffith$elm_animator$Animator$current(model.spinning);
+									switch (_v4.$) {
+										case 'Spinning':
+											return $author$project$Main$NoOp;
+										case 'Stopped':
+											return $author$project$Main$ResetGame;
+										default:
+											return $author$project$Main$ResetGame;
+									}
+								}()),
+								$rtfeldman$elm_css$Html$Styled$Attributes$css(
+								_List_fromArray(
+									[
+										$rtfeldman$elm_css$Css$fontSize(
+										$rtfeldman$elm_css$Css$rem(3)),
+										A2(
+										$rtfeldman$elm_css$Css$padding2,
+										$rtfeldman$elm_css$Css$rem(0.5),
+										$rtfeldman$elm_css$Css$rem(1)),
+										$rtfeldman$elm_css$Css$textTransform($rtfeldman$elm_css$Css$uppercase),
+										$rtfeldman$elm_css$Css$cursor($rtfeldman$elm_css$Css$pointer),
+										$rtfeldman$elm_css$Css$marginLeft(
+										$rtfeldman$elm_css$Css$rem(3))
+									]))
+							]),
+						_List_fromArray(
+							[
+								$rtfeldman$elm_css$Html$Styled$text(
+								function () {
+									var _v5 = $mdgriffith$elm_animator$Animator$current(model.spinning);
+									switch (_v5.$) {
+										case 'NotYetSpun':
+											return 'Reset Game';
+										case 'Stopped':
+											return 'Reset Game';
+										default:
+											return 'Spinning...';
 									}
 								}())
 							]))

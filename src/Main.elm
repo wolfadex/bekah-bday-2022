@@ -211,6 +211,7 @@ type Msg
     | IncreaseBet
     | NoOp
     | ResetWinCalc
+    | ResetGame
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -218,6 +219,11 @@ update msg model =
     (case msg of
         GotZone zone ->
             ( { model | zone = zone }, Cmd.none )
+
+        ResetGame ->
+            ( { model | money = defaultModel.money }
+            , Cmd.none
+            )
 
         CurrentTime today ->
             ( { model | today = today }, Cmd.none )
@@ -655,6 +661,36 @@ viewModel model =
 
                         Spinning ->
                             "Stop"
+                ]
+            , Html.Styled.button
+                [ Html.Styled.Events.onClick <|
+                    case Animator.current model.spinning of
+                        Spinning ->
+                            NoOp
+
+                        Stopped ->
+                            ResetGame
+
+                        NotYetSpun ->
+                            ResetGame
+                , Html.Styled.Attributes.css
+                    [ Css.fontSize (Css.rem 3)
+                    , Css.padding2 (Css.rem 0.5) (Css.rem 1)
+                    , Css.textTransform Css.uppercase
+                    , Css.cursor Css.pointer
+                    , Css.marginLeft (Css.rem 3)
+                    ]
+                ]
+                [ Html.Styled.text <|
+                    case Animator.current model.spinning of
+                        NotYetSpun ->
+                            "Reset Game"
+
+                        Stopped ->
+                            "Reset Game"
+
+                        Spinning ->
+                            "Spinning..."
                 ]
             ]
         ]
