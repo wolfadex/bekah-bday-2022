@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A game for my wife for her bday 2022",
   "scripts": {
-    "dev": "elm-live src/Main.elm --port 1234 --dir dist --start-page index.html -- --output dist/elm.js"
+    "dev": "elm-live src/Main.elm --port 1234 --dir docs --start-page index.html -- --output docs/elm.js"
   },
   "author": "Wolfgang Schuster",
   "volta": {
